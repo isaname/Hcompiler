@@ -1,3 +1,5 @@
 int main() {
-    return 0;
+    return 4;
 }
+/* 密码fef* fe*
+飞机*/

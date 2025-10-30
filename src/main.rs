@@ -1,8 +1,11 @@
+mod ast;
+mod irgen;
+
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
 use std::io::Result;
-
+use koopa::back::KoopaGenerator;
 
 lalrpop_mod! {
   #[allow(clippy::all)]
@@ -23,8 +26,12 @@ fn main() -> Result<()> {
 
   // 调用 lalrpop 生成的 parser 解析输入文件
   let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
-
-  // 输出解析得到的 AST
-  println!("{}", ast);
+  let ret_val = ast.func_def.block.stmt.num;
+  println!("{:#?}", ast);
+  // * 生成ir
+  let ir = irgen::gen_ir(&ast,ret_val).unwrap();
+  if mode=="-koopa" {
+    return KoopaGenerator::from_path(output).unwrap().generate_on(&ir);
+  }
   Ok(())
 }
