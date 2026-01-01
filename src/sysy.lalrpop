@@ -2,7 +2,10 @@ use crate::ast::*;
 
 // lalrpop 里的约定
 grammar;
-
+/* 目前存在的问题：
+  1.Btype和FuncType重复了
+  2.Stmt中的二义性问题
+*/
 // 约束 lexer 的行为
 match {
   // 跳过空白符和注释
@@ -12,30 +15,286 @@ match {
   _
 }
 
-pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit { <> };
 
-FuncDef: FuncDef = {
-  <func_type: FuncType> <ident: Ident> "(" ")" <block: Block> => {
-    FuncDef { <> }
+pub CompUnit: CompUnit = <items: GlobalItem*> => CompUnit { <> };
+
+GlobalItem: GlobalItem = {
+  <Decl> => GlobalItem::Decl ( <> ),
+  <FuncDef> => GlobalItem::FuncDef ( <> )
+}
+
+Decl: Decl =  {
+  <ConstDecl> => Decl::ConstDecl ( <> ),
+  <VarDecl> => Decl::VarDecl ( <> )
+}
+
+ConstDecl: ConstDecl = {
+  "const" "int" <def:ConstDef> <mut const_defs:("," <ConstDef>)*> ";"=> { 
+    const_defs.insert(0,def);
+    ConstDecl { 
+      btype:Btype::Int,
+      const_defs
+    }
+  },
+  "const" "float" <def:ConstDef> <mut const_defs:("," <ConstDef>)*> ";"=> { 
+    const_defs.insert(0,def);
+    ConstDecl { 
+      btype:Btype::Float,
+      const_defs
+    }
   }
 }
 
-FuncType: FuncType = "int" => FuncType::Int;
 
-Block: Block = "{" <stmt: Stmt> "}" => Block { <> };
+ConstDef: ConstDef = <ident:Ident> <const_exps:("[" <ConstExp> "]")*> "=" <const_init_val:ConstInitVal> => {
+  ConstDef{<>}
+}; 
+//TODO
+ConstInitVal: ConstInitVal = {
+  <ConstExp> => ConstInitVal::ConstExp ( <> ),
+  "{" <list:(<ConstInitVal> <("," <ConstInitVal>)*>)?> "}" => {
+    ConstInitVal::ConstInitVals(
+      match list {
+        None => vec![],
+        Some((b,mut bs)) => {
+          bs.insert(0,b);
+          bs
+        }
+    })
+  }
+}
 
-Stmt: Stmt = "return" <num: Number> ";" => Stmt { <> };
+VarDecl: VarDecl = {
+  "int" <def:VarDef> <mut var_defs:("," <VarDef>)*>";" => {
+    var_defs.insert(0, def);
+    VarDecl {
+      btype:Btype::Int,
+      var_defs
+    }
+  },
+  "float" <def:VarDef> <mut var_defs:("," <VarDef>)*>";" => {
+    var_defs.insert(0, def);
+    VarDecl {
+      btype:Btype::Float,
+      var_defs
+    }
+  }
+}
 
-Number: i32 = <num: IntConst> => <>; // *Number:i32 表明Number只是i32的一个别名，不需要在ast里配置 
+VarDef: VarDef = {
+  <ident:Ident> <dims:("[" <ConstExp> "]")*> => {
+    VarDef::Without(ident, dims)
+  },
+  <ident:Ident> <dims:("[" <ConstExp> "]")*> "=" <init_val:InitVal> => {
+    VarDef::WithInitVal(ident, dims, init_val)
+  }
+};
 
-// 如果匹配到标识符, 就返回这个字符串
-// 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
-// 关于尖括号到底代表什么, 请 RTFM
+InitVal: InitVal = {
+  <exp:Exp> => InitVal::Exp(exp),
+  "{" <init_val:(<InitVal> <("," <InitVal>)*>)?> "}" => {
+    InitVal::InitVals(match init_val {
+      None=>vec![],
+      Some((b, mut bs)) => {
+        bs.insert(0,b);
+        bs
+      }
+    })
+  }
+}
+
+// FuncDef: FuncDef = {
+//   <func_type: FuncType> <ident: Ident> "(" <func_f_params:FuncFParams?> ")" <block: Block> => {
+//     FuncDef { <> }
+//   }
+// }
+FuncDef: FuncDef = {
+  <head: FuncDefHead> ")" <block: Block> => {
+    FuncDef { func_type: head.0, ident: head.1, func_f_params: None, block }
+  },
+  <head: FuncDefHead> <params: FuncFParams> ")"
+  <block: Block> => {
+    FuncDef { func_type: head.0, ident: head.1, func_f_params: Some(params), block }
+  },
+}
+
+FuncDefHead: (FuncType, String) = {
+  "void" <id: Ident> "(" => (FuncType::Void, <>),
+  "int" <id: Ident> "(" => (FuncType::Int, <>),
+  "float" <id: Ident> "(" => (FuncType::Float, <>)
+}
+
+FuncFParams: FuncFParams = <item:FuncFParam> <mut items:("," <FuncFParam>)*> => {
+  items.insert(0, item);
+  FuncFParams{items}
+};
+
+
+FuncFParam: FuncFParam = {
+  "int" <ident:Ident> <dims:("[" "]" <("["<Exp>"]")*>)?> => {
+    FuncFParam{ btype:Btype::Int, ident, dims}
+  },
+  "float" <ident:Ident> <dims:("[" "]" <("["<Exp>"]")*>)?> => {
+    FuncFParam{ btype:Btype::Float, ident, dims}
+  }
+}
+
+Block: Block = "{" <items: BlockItem*> "}" => Block { <> };
+
+BlockItem: BlockItem = {
+  <Decl> => BlockItem::Decl(<>),
+  <Stmt> => BlockItem::Stmt(<>)
+}
+
+// Stmt: Stmt = {
+//   <LVal> "=" <Exp> ";" => Stmt::AssignStmt(<>),
+//   <Exp?> ";" => Stmt::ExpStmt(<>),
+//   <Block> => Stmt::BlockStmt(<>),
+//   "if" "(" <Cond> ")" <Stmt> <("else" <Stmt>)?> => Stmt::IfStmt(<>),
+//   "while" "(" <Cond> ")" <Stmt> => Stmt::WhileStmt(<>),
+//   "break;" => Stmt::BreakStmt,
+//   "continue;" => Stmt::ContStmt,
+//   "return" <Exp?> ";" => Stmt::RetStmt(<>)
+// }
+// ! 世界未解之谜，这个地方这么写到底避免了什么
+Stmt: Stmt = {
+  MatchedStmt => <>,
+  OpenStmt => <>,
+}
+
+MatchedStmt: Stmt = {
+  <lval: LVal> "=" <exp: Exp> ";" => Stmt::AssignStmt(<>),
+  <exp: (Exp)?> ";" => Stmt::ExpStmt(<>),
+  <Block> => Stmt::BlockStmt(<>),
+  "if" "(" <cond: Cond> ")" <then: MatchedStmt>
+  "else" <else_then: MatchedStmt> => {
+    Stmt::IfStmt(cond, Box::new(then), Some(Box::new(else_then)))
+  },
+  "while" "(" <cond: Cond> ")" <body: MatchedStmt> => {
+    Stmt::WhileStmt(cond, Box::new(body))
+  },
+  "break" ";" => Stmt::BreakStmt,
+  "continue" ";" => Stmt::ContStmt,
+  "return" <exp: (Exp)?> ";" => Stmt::RetStmt(<>),
+}
+
+OpenStmt: Stmt = {
+  "if" "(" <cond: Cond> ")" <then: Stmt> => {
+    Stmt::IfStmt(cond, Box::new(then), None)
+  },
+  "if" "(" <cond: Cond> ")" <then: MatchedStmt>
+  "else" <else_then: OpenStmt> => {
+    Stmt::IfStmt(cond, Box::new(then), Some(Box::new(else_then)))
+  },
+  "while" "(" <cond: Cond> ")" <body: OpenStmt> => {
+    Stmt::WhileStmt(cond, Box::new(body))
+  },
+}
+
+Exp: Exp = <item:AddExp> => Exp{<>};
+
+Cond: Cond = <item:LOrExp> => Cond{<>};
+
+LVal: LVal = <ident: Ident> <dims:("[" <Exp> "]")*> => LVal{<>};
+
+PrimaryExp: PrimaryExp = {
+  "("<Exp>")" => PrimaryExp::Exp(Box::new(<>)),
+  <LVal> => PrimaryExp::LVal(<>),
+  <Number> => PrimaryExp::Number(<>)
+}
+
+Number: Number = {
+  <IntConst> => Number::IntConst(<>),
+  <FloatConst> => Number::FloatConst(<>)
+}
+
+// UnaryExp: UnaryExp = {
+//   <PrimaryExp> => UnaryExp::PrimaryExp(<>),
+//   <Ident> "("<FuncRParams?>")" => UnaryExp::CallExp(<>),
+//   <UnaryOp> <UnaryExp> => UnaryExp::UnaryExp(<>)
+// }
+UnaryExp: UnaryExp = {
+  PrimaryExp => UnaryExp::PrimaryExp(Box::new(<>)),
+  <id: Ident> "(" <params:FuncRParams?> ")" => {
+    UnaryExp::CallExp(id, params)
+  },
+  "+" <UnaryExp> => <>,
+  <op: UnaryOp> <exp: UnaryExp> => UnaryExp::UnaryExp(op, Box::new(exp)),
+}
+
+
+FuncRParams: FuncRParams = <item:Exp> <mut items:("," <Exp>)*> => {
+  items.insert(0, item);
+  FuncRParams{items}
+};
+
+MulExp: MulExp = {
+  <UnaryExp> => MulExp::UnaryExp(Box::new(<>)),
+  <a:MulExp> <b:MulOp> <c:UnaryExp> => MulExp::MulExp(Box::new(a),b,c)
+}
+
+
+AddExp: AddExp = {
+  <MulExp> => AddExp::MulExp(Box::new(<>)),
+  <a:AddExp> <b:AddOp> <c:MulExp> => AddExp::AddExp(Box::new(a),b,c)
+}
+
+
+RelExp: RelExp = {
+  <AddExp> => RelExp::AddExp(<>),
+  <a:RelExp> <b:RelOp> <c:AddExp> => RelExp::RelExp(Box::new(a),b,c)
+}
+
+
+EqExp: EqExp = {
+  <RelExp> => EqExp::RelExp(<>),
+  <a:EqExp> <b:EqOp> <c:RelExp> => EqExp::EqExp(Box::new(a),b,c)
+}
+
+
+LAndExp: LAndExp = {
+  <EqExp> => LAndExp::EqExp(<>),
+  <a:LAndExp> "&&" <b:EqExp> => LAndExp::LAndExp(Box::new(a),b)
+}
+
+LOrExp: LOrExp = {
+  <LAndExp> => LOrExp::LAndExp(<>),
+  <a:LOrExp> "||" <b:LAndExp> => LOrExp::LOrExp(Box::new(a),b)
+}
+
+ConstExp: ConstExp = <item:AddExp> => ConstExp{<>};
+
 Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
 
-// 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
 IntConst: i32 = {
   r"[1-9][0-9]*" => i32::from_str_radix(<>, 10).unwrap(),
   r"0[0-7]*" => i32::from_str_radix(<>, 8).unwrap(),
   r"0[xX][0-9a-fA-F]+" => i32::from_str_radix(&<>[2..], 16).unwrap(),
+}
+
+FloatConst: f32 = {
+  r"[0-9]+\.|[0-9]*\.[0-9]+" => <>.parse().unwrap()
+}
+UnaryOp: UnaryOp = {
+  "-" => UnaryOp::Minus,
+  "!" => UnaryOp::Not
+}
+MulOp: MulOp = {
+  "*" => MulOp::Mul,
+  "/" => MulOp::Div,
+  "%" => MulOp::Mod
+}
+AddOp: AddOp = {
+  "+" => AddOp::Add,
+  "-" => AddOp::Sub
+}
+RelOp: RelOp = {
+  ">" => RelOp::GT,
+  "<" => RelOp::LT,
+  ">=" => RelOp::GE,
+  "<=" => RelOp::LE
+}
+EqOp: EqOp = {
+  "==" => EqOp::EQ,
+  "!=" => EqOp::NE
 }

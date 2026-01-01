@@ -3,10 +3,11 @@ name = "Hcompiler"
 version = "0.1.0"
 edition = "2021"
 
+# Add a build-time dependency on the lalrpop library:
 [build-dependencies]
-lalrpop = "0.20.0"
+lalrpop = "0.22.2"
 
 [dependencies]
-lalrpop-util = { version = "0.20.0", features = ["lexer"] }
+lalrpop-util ={ version = "0.22.2", features = ["lexer"]}
 regex = "1.5.6"
-koopa = "0.0.8"
+koopa = "0.0.7"
