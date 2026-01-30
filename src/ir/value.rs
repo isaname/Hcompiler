@@ -196,7 +196,7 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 Function 结构体
     /// - 类型为传入的 `ty`
-    fn create_func(name: String, m: ptr!(Module), ty: Rc<Type>) -> Self {
+    pub fn create_func(name: String, m: ptr!(Module), ty: Rc<Type>) -> Self {
         assert!(ty.is_func());
         let func = Function::new(downgrade!(&m));
         Value::new(ValueBase::new(ty, Some(name)), ValueExt::Function(func))
@@ -215,7 +215,7 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 BasicBlock 结构体
     /// - 类型为 label 类型
-    fn create_bb(name: String, m: ptr!(Module), parent: ptr!(Value)) -> Self {
+    pub fn create_bb(name: String, m: ptr!(Module), parent: ptr!(Value)) -> Self {
         assert!(parent.borrow().is_func());
         Value::new(
             ValueBase::new(ModulePtr(m.clone()).get_lable_ty(), Some(name)),
@@ -227,7 +227,7 @@ impl Value {
     /// # 返回值
     /// - Some(ModulePtr)   如果 self 是 BasicBlock 且 weak 引用有效
     /// - None              如果 self 不是 BasicBlock 或引用已失效
-    fn bb_get_module(&self) -> Option<ptr!(Module)> {
+    pub fn bb_get_module(&self) -> Option<ptr!(Module)> {
         match &self.vx {
             ValueExt::BasicBlock(bb) => Some(bb.m.clone().upgrade().unwrap()),
             _ => None,
@@ -237,7 +237,7 @@ impl Value {
     ///
     /// # Panic
     /// - 当 self 不是 BasicBlock 或 weak 引用已失效时会 panic
-    fn bb_get_module_ptr(&self) -> ModulePtr {
+    pub fn bb_get_module_ptr(&self) -> ModulePtr {
         ModulePtr(self.bb_get_module().unwrap())
     }
     /// 获取当前基本块所属的父函数（Option 形式）
@@ -245,7 +245,7 @@ impl Value {
     /// # 返回值
     /// - Some(ptr!(Value))    如果 self 是 BasicBlock 且 weak 引用有效
     /// - None              如果 self 不是 BasicBlock 或引用已失效
-    fn bb_get_parent(&self) -> Option<ptr!(Value)> {
+    pub fn bb_get_parent(&self) -> Option<ptr!(Value)> {
         match &self.vx {
             ValueExt::BasicBlock(bb) => Some(bb.parent.clone().upgrade().unwrap()),
             _ => None,
@@ -258,7 +258,7 @@ impl Value {
     ///
     /// # 副作用
     /// - 在当前基本块的 pre_bbs 链表中添加 weak 引用
-    fn add_pre_bbs(&mut self, bb: ptr!(Value)) {
+    pub fn add_pre_bbs(&mut self, bb: ptr!(Value)) {
         assert!(bb.borrow().is_bb());
         match &mut self.vx {
             ValueExt::BasicBlock(b) => {
@@ -274,7 +274,7 @@ impl Value {
     ///
     /// # 副作用
     /// - 在当前基本块的 succ_bbs 链表中添加 strong 引用
-    fn add_succ_bbs(&mut self, bb: ptr!(Value)) {
+    pub fn add_succ_bbs(&mut self, bb: ptr!(Value)) {
         assert!(bb.borrow().is_bb());
         match &mut self.vx {
             ValueExt::BasicBlock(b) => {
@@ -290,7 +290,7 @@ impl Value {
     ///
     /// # 副作用
     /// - 从 pre_bbs 中删除匹配的 weak 引用（通过 Rc::ptr_eq 判断）
-    fn remove_pre_bbs(&mut self, bb: ptr!(Value)) {
+    pub fn remove_pre_bbs(&mut self, bb: ptr!(Value)) {
         assert!(bb.borrow().is_bb());
         match &mut self.vx {
             ValueExt::BasicBlock(b) => {
@@ -307,7 +307,7 @@ impl Value {
     ///
     /// # 副作用
     /// - 从 succ_bbs 中删除匹配的 strong 引用（通过 Rc::ptr_eq 判断）
-    fn remove_succ_bbs(&mut self, bb: ptr!(Value)) {
+    pub fn remove_succ_bbs(&mut self, bb: ptr!(Value)) {
         assert!(bb.borrow().is_bb());
         match &mut self.vx {
             ValueExt::BasicBlock(b) => {
@@ -332,7 +332,7 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 Arg 结构体
     /// - 类型为传入的 `ty`
-    fn create_arg(name: String, parent: ptr!(Value), ty: Rc<Type>, arg_no: usize) -> Self {
+    pub fn create_arg(name: String, parent: ptr!(Value), ty: Rc<Type>, arg_no: usize) -> Self {
         assert!(parent.borrow().is_func());
         Value::new(
             ValueBase::new(ty, Some(name)),
@@ -359,7 +359,7 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 GlobalVariable（通过 User 实现）
     /// - 类型为传入的 `ty`（通常为指针类型）
-    fn create_gv(
+    pub fn create_gv(
         name: String,
         m: ptr!(Module),
         ty: Rc<Type>,
@@ -392,7 +392,7 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 Constant::Int
     /// - 类型为传入的 `ty`
-    fn create_const_int(ty: Rc<Type>, val: i32) -> Self {
+    pub fn create_const_int(ty: Rc<Type>, val: i32) -> Self {
         assert!(ty.is_int());
         let user = User::new(UserBase::new(), UserExt::Constant(Constant::Int(val)));
         Value::new(
@@ -407,7 +407,7 @@ impl Value {
     ///
     /// # 返回值
     /// - 等价于 create_const_int(ty, 0)
-    fn create_const_zero(ty: Rc<Type>) -> Self {
+    pub fn create_const_zero(ty: Rc<Type>) -> Self {
         assert!(ty.is_int());
         Value::create_const_int(ty, 0)
     }
@@ -422,7 +422,7 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 Constant::Array
     /// - 类型为传入的 `ty`
-    fn create_const_arr(ty: Rc<Type>, val: Vec<Value>) -> Self {
+    pub fn create_const_arr(ty: Rc<Type>, val: Vec<Value>) -> Self {
         assert!(ty.is_arr());
         for i in &val {
             assert!(i.is_const());
@@ -445,7 +445,7 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 Constant::Float
     /// - 类型为传入的 `ty`
-    fn create_const_float(ty: Rc<Type>, val: f32) -> Self {
+    pub fn create_const_float(ty: Rc<Type>, val: f32) -> Self {
         assert!(ty.is_float());
         let user = User::new(UserBase::new(), UserExt::Constant(Constant::Float(val)));
         Value::new(
@@ -457,7 +457,7 @@ impl Value {
 
 impl Value {
     // * helper function
-    fn make_inst_user(op_id: OpId, bb: ptr!(Value)) -> UserPtr {
+    pub fn make_inst_user(op_id: OpId, bb: ptr!(Value)) -> UserPtr {
         assert!(bb.borrow().is_bb());
         let user = User::new(
             UserBase::new(),
@@ -466,7 +466,7 @@ impl Value {
         UserPtr(make_ptr!(user))
     }
 
-    fn make_val_from_up(up: UserPtr, ty: Rc<Type>) -> Self {
+    pub fn make_val_from_up(up: UserPtr, ty: Rc<Type>) -> Self {
         Value::new(ValueBase::new(ty, None), ValueExt::User(up))
     }
 }
@@ -482,7 +482,7 @@ impl Value {
     ///
     /// # 返回值
     /// - 结果类型固定为当前 Module 的默认整数类型（通常 i32）
-    fn create_inst_ibinary(
+    pub fn create_inst_ibinary(
         op_id: IBinaryId,
         v1: ptr!(Value),
         v2: ptr!(Value),
@@ -511,7 +511,7 @@ impl Value {
     ///
     /// # 返回值
     /// - 结果类型固定为当前 Module 的默认浮点类型（通常 float / f32）
-    fn create_inst_fbinary(
+    pub fn create_inst_fbinary(
         op_id: FBinaryId,
         v1: ptr!(Value),
         v2: ptr!(Value),
@@ -541,7 +541,12 @@ impl Value {
     ///
     /// # 返回值
     /// - 固定返回当前 Module 的 bool 类型（i1）
-    fn create_inst_cmp(op_id: ICmpId, v1: ptr!(Value), v2: ptr!(Value), bb: ptr!(Value)) -> Self {
+    pub fn create_inst_cmp(
+        op_id: ICmpId,
+        v1: ptr!(Value),
+        v2: ptr!(Value),
+        bb: ptr!(Value),
+    ) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(v1.borrow().vb.type_.is_int() && v2.borrow().vb.type_.is_int());
         let ty = bb.borrow().bb_get_module_ptr().get_bool_ty();
@@ -566,7 +571,12 @@ impl Value {
     ///
     /// # 返回值
     /// - 固定返回当前 Module 的 bool 类型（i1）
-    fn create_inst_fcmp(op_id: FCmpId, v1: ptr!(Value), v2: ptr!(Value), bb: ptr!(Value)) -> Self {
+    pub fn create_inst_fcmp(
+        op_id: FCmpId,
+        v1: ptr!(Value),
+        v2: ptr!(Value),
+        bb: ptr!(Value),
+    ) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(v1.borrow().get_type().is_float() && v2.borrow().get_type().is_float());
         let ty = bb.borrow().bb_get_module_ptr().get_bool_ty();
@@ -617,7 +627,7 @@ impl Value {
     ///
     /// # 注意
     /// - 会自动维护前驱/后继基本块关系（predecessor/successor）
-    fn create_inst_br(if_true: ptr!(Value), bb: ptr!(Value)) -> Self {
+    pub fn create_inst_br(if_true: ptr!(Value), bb: ptr!(Value)) -> Self {
         assert!(if_true.borrow().is_bb());
         assert!(bb.borrow().is_bb());
         let ty = module_ptr!(bb).get_void_ty();
@@ -637,7 +647,7 @@ impl Value {
     ///
     /// # 注意
     /// - 会自动维护前驱/后继关系（但存在潜在循环引用问题，需后续 GC 或改用 weak ptr 优化）
-    fn create_inst_cond_br(
+    pub fn create_inst_cond_br(
         cond: ptr!(Value),
         if_true: ptr!(Value),
         if_false: ptr!(Value),
@@ -664,7 +674,7 @@ impl Value {
     /// # 参数约束
     /// - `val`       : 返回值，其类型必须与当前函数的返回类型**完全一致**
     /// - `bb`        : 当前基本块（通常为函数的退出块）
-    fn create_inst_ret(val: ptr!(Value), bb: ptr!(Value)) -> Self {
+    pub fn create_inst_ret(val: ptr!(Value), bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(Rc::ptr_eq(
             &bb.borrow()
@@ -686,7 +696,7 @@ impl Value {
     /// # 参数约束
     /// - `bb`        : 当前基本块
     /// - 当前函数的返回类型必须是 void
-    fn create_inst_void_ret(bb: ptr!(Value)) -> Self {
+    pub fn create_inst_void_ret(bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(bb
             .borrow()
@@ -714,7 +724,7 @@ impl Value {
     /// # 返回值
     /// - 新的指针类型（指向最终元素类型）
     /// - 当前不支持多级指针的复杂情况
-    fn create_inst_gep(ptr: ptr!(Value), idxs: Vec<ptr!(Value)>, bb: ptr!(Value)) -> Self {
+    pub fn create_inst_gep(ptr: ptr!(Value), idxs: Vec<ptr!(Value)>, bb: ptr!(Value)) -> Self {
         // 从ptr中获取具体类型
         assert!(ptr.borrow().get_type().is_ptr());
         let mut ty = ptr.borrow().get_type().get_ptr_elem_ty().unwrap();
@@ -742,7 +752,7 @@ impl Value {
     /// - `val`       : 要写入的值
     /// - `ptr`       : 目标指针，其指向的元素类型必须与 `val` 类型**完全相同**
     /// - `bb`        : 插入的基本块
-    fn create_inst_store(val: ptr!(Value), ptr: ptr!(Value), bb: ptr!(Value)) -> Self {
+    pub fn create_inst_store(val: ptr!(Value), ptr: ptr!(Value), bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(Rc::ptr_eq(
             &ptr.borrow().get_type().get_ptr_elem_ty().unwrap(),
@@ -760,7 +770,7 @@ impl Value {
     /// - `ptr`       : 要读取的指针，必须是指针类型
     /// - 指针指向的元素类型必须是 int / float / ptr（当前不支持结构体/数组直接 load）
     /// - `bb`        : 插入的基本块
-    fn create_inst_load(ptr: ptr!(Value), bb: ptr!(Value)) -> Self {
+    pub fn create_inst_load(ptr: ptr!(Value), bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         let ty = ptr.borrow().get_type().get_ptr_elem_ty().unwrap();
         assert!(ty.is_bool_or_int() || ty.is_float() || ty.is_ptr());
@@ -776,7 +786,7 @@ impl Value {
     ///
     /// # 返回值
     /// - 指向分配空间的指针（类型为 `ptr ty`）
-    fn create_inst_alloc(ty: Rc<Type>, bb: ptr!(Value)) -> Self {
+    pub fn create_inst_alloc(ty: Rc<Type>, bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(ty.is_bool_or_int() || ty.is_float() || ty.is_ptr() || ty.is_arr());
         let mut userptr = Self::make_inst_user(OpId::Alloca, bb.clone());
@@ -791,7 +801,7 @@ impl Value {
     /// - `val`       : 输入值，必须是 bool 类型（i1）
     /// - `ty`        : 目标整数类型（通常 i32）
     /// - `bb`        : 插入的基本块
-    fn create_inst_zext(val: ptr!(Value), ty: Rc<Type>, bb: ptr!(Value)) -> Self {
+    pub fn create_inst_zext(val: ptr!(Value), ty: Rc<Type>, bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(val.borrow().get_type().is_bool());
         assert!(ty.is_int());
@@ -805,7 +815,7 @@ impl Value {
     /// - `val`       : 浮点值
     /// - `ty`        : 目标整数类型（支持 bool/i1 到任意整数）
     /// - `bb`        : 插入的基本块
-    fn create_inst_fp2si(val: ptr!(Value), ty: Rc<Type>, bb: ptr!(Value)) -> Self {
+    pub fn create_inst_fp2si(val: ptr!(Value), ty: Rc<Type>, bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(val.borrow().get_type().is_float());
         assert!(ty.is_bool_or_int());
@@ -818,7 +828,7 @@ impl Value {
     /// # 参数约束
     /// - `val`       : 有符号整数或 bool
     /// - `bb`        : 插入的基本块
-    fn create_inst_si2fp(val: ptr!(Value), bb: ptr!(Value)) -> Self {
+    pub fn create_inst_si2fp(val: ptr!(Value), bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(val.borrow().get_type().is_bool_or_int());
         let ty = bb.borrow().bb_get_module_ptr().get_float_ty();
@@ -837,7 +847,7 @@ impl Value {
     ///
     /// # 注意
     /// - PHI 必须出现在基本块的**第一条指令**
-    fn create_inst_phi(
+    pub fn create_inst_phi(
         ty: Rc<Type>,
         vals: Vec<ptr!(Value)>,
         val_bbs: Vec<ptr!(Value)>,
