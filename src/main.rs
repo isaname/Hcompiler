@@ -1,11 +1,12 @@
+#![feature(linked_list_retain)]
 mod ast;
+mod ir;
+mod macros;
 // mod irgen;
-
 use lalrpop_util::lalrpop_mod;
 use std::env::args;
 use std::fs::read_to_string;
 use std::io::Result;
-use koopa::back::KoopaGenerator;
 
 lalrpop_mod! {
   #[allow(clippy::all)]

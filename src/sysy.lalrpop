@@ -209,7 +209,7 @@ Number: Number = {
 }
 
 UnaryExp: UnaryExp = {
-  PrimaryExp => UnaryExp::PrimaryExp(Box::new(<>)),
+  <PrimaryExp> => UnaryExp::PrimaryExp(Box::new(<>)),
   <id: Ident> "(" <params:FuncRParams?> ")" => {
     UnaryExp::CallExp(id, params)
   },
