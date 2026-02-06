@@ -29,7 +29,6 @@ impl Use {
     }
 }
 
-pub struct ValuePtr(pub ptr!(Value));
 
 pub enum ValueExt {
     BasicBlock(BasicBlock),
@@ -41,6 +40,12 @@ pub enum ValueExt {
 pub struct Value {
     pub vb: ValueBase,
     pub vx: ValueExt,
+}
+
+pub struct ValueBase {
+    type_: Rc<Type>,
+    use_list: RefCell<Vec<Use>>,
+    name: Option<String>,
 }
 
 pub struct BasicBlock {
@@ -61,12 +66,6 @@ pub struct Function {
 pub struct Arg {
     parent: weak_ptr!(Value), // * Function
     arg_no: usize,
-}
-
-pub struct ValueBase {
-    type_: Rc<Type>,
-    use_list: RefCell<Vec<Use>>,
-    name: Option<String>,
 }
 
 impl ValueBase {
@@ -185,7 +184,7 @@ impl Value {
 
 impl Value {
     // * function
-    /// 创建函数对象（Function）
+    /// 创建函数对象（Function），但是对象里没有Arg，需要后续添加
     ///
     /// # 参数约束
     /// - `name`      : 函数名称（用于调试/打印，通常对应 IR 中的 @funcname）
@@ -196,11 +195,37 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 Function 结构体
     /// - 类型为传入的 `ty`
-    pub fn create_func(name: String, m: ptr!(Module), ty: Rc<Type>) -> Self {
+    pub fn create_func(name: String, m: ptr!(Module), ty: Rc<Type>) -> ptr!(Self) {
         assert!(ty.is_func());
         let func = Function::new(downgrade!(&m));
-        Value::new(ValueBase::new(ty, Some(name)), ValueExt::Function(func))
+        let temp = Value::new(ValueBase::new(ty, Some(name)), ValueExt::Function(func));
+        let res = make_ptr!(temp);
+        ModulePtr(m).add_function(res.clone());
+        res
     }
+
+    pub fn func_add_bb(&mut self, bb:ptr!(Value)) {
+        assert!(self.is_func());
+        match &mut self.vx {
+            ValueExt::Function(a) => {
+                a.bbs.push_back(bb);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn func_add_arg(&mut self, arg: ptr!(Value), no: usize) {
+        assert!(self.is_func());
+        assert!(self.is_arg());
+        match &mut self.vx {
+            ValueExt::Function(f) => {
+                assert!(f.args.len() == no);
+                f.args.push_back(arg);
+            },
+            _ =>{}
+        }
+    }
+
 }
 
 impl Value {
@@ -208,19 +233,22 @@ impl Value {
     /// 创建基本块（BasicBlock）
     ///
     /// # 参数约束
-    /// - `name`      : 基本块名称（可选，用于调试/打印，如 %entry, %loop.body 等）
+    /// - `name`      : 基本块名称（必填，用于调试/打印，如 %entry, %loop.body 等）
     /// - `m`         : 所属的 Module（用于获取类型系统等全局信息）
     /// - `parent`    : 所属的函数（必须是 Function 类型的 Value）
     ///
     /// # 返回值
     /// - 一个 Value，内部封装了 BasicBlock 结构体
     /// - 类型为 label 类型
-    pub fn create_bb(name: String, m: ptr!(Module), parent: ptr!(Value)) -> Self {
+    pub fn create_bb(name: String, m: ptr!(Module), parent: ptr!(Value)) -> ptr!(Self) {
         assert!(parent.borrow().is_func());
-        Value::new(
-            ValueBase::new(ModulePtr(m.clone()).get_lable_ty(), Some(name)),
+        let temp = Value::new(
+            ValueBase::new(ModulePtr(m.clone()).get_lable_ty(), Some(String::from("label_")+&name)),
             ValueExt::BasicBlock(BasicBlock::new(downgrade!(&parent), downgrade!(&m))),
-        )
+        );
+        let res = make_ptr!(temp);
+        parent.borrow_mut().func_add_bb(res.clone());
+        res
     }
     /// 获取当前基本块所属的 Module（Option 形式）
     ///
@@ -258,7 +286,7 @@ impl Value {
     ///
     /// # 副作用
     /// - 在当前基本块的 pre_bbs 链表中添加 weak 引用
-    pub fn add_pre_bbs(&mut self, bb: ptr!(Value)) {
+    pub fn bb_add_pre_bbs(&mut self, bb: ptr!(Value)) {
         assert!(bb.borrow().is_bb());
         match &mut self.vx {
             ValueExt::BasicBlock(b) => {
@@ -274,7 +302,7 @@ impl Value {
     ///
     /// # 副作用
     /// - 在当前基本块的 succ_bbs 链表中添加 strong 引用
-    pub fn add_succ_bbs(&mut self, bb: ptr!(Value)) {
+    pub fn bb_add_succ_bbs(&mut self, bb: ptr!(Value)) {
         assert!(bb.borrow().is_bb());
         match &mut self.vx {
             ValueExt::BasicBlock(b) => {
@@ -290,7 +318,7 @@ impl Value {
     ///
     /// # 副作用
     /// - 从 pre_bbs 中删除匹配的 weak 引用（通过 Rc::ptr_eq 判断）
-    pub fn remove_pre_bbs(&mut self, bb: ptr!(Value)) {
+    pub fn bb_remove_pre_bbs(&mut self, bb: ptr!(Value)) {
         assert!(bb.borrow().is_bb());
         match &mut self.vx {
             ValueExt::BasicBlock(b) => {
@@ -307,7 +335,7 @@ impl Value {
     ///
     /// # 副作用
     /// - 从 succ_bbs 中删除匹配的 strong 引用（通过 Rc::ptr_eq 判断）
-    pub fn remove_succ_bbs(&mut self, bb: ptr!(Value)) {
+    pub fn bb_remove_succ_bbs(&mut self, bb: ptr!(Value)) {
         assert!(bb.borrow().is_bb());
         match &mut self.vx {
             ValueExt::BasicBlock(b) => {
@@ -315,6 +343,33 @@ impl Value {
             }
             _ => {}
         }
+    }
+
+    pub fn bb_is_terminated(& self) -> bool {
+        assert!(self.is_bb());
+        match &self.vx {
+            ValueExt::BasicBlock(b) => {
+                if b.insts.is_empty() {
+                    return false;
+                }
+                match &b.insts.back().unwrap().borrow().vx {
+                    ValueExt::User(u) => {
+                        match &u.0.borrow().ux {
+                            UserExt::Instruction(inst) => {
+                                match inst.op_id {
+                                    OpId::Br|OpId::Ret => {return true;},
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                    },
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        return false;
     }
 }
 
@@ -332,10 +387,10 @@ impl Value {
     /// # 返回值
     /// - 一个 Value，内部封装了 Arg 结构体
     /// - 类型为传入的 `ty`
-    pub fn create_arg(name: String, parent: ptr!(Value), ty: Rc<Type>, arg_no: usize) -> Self {
+    pub fn create_arg(name: Option<String>, parent: ptr!(Value), ty: Rc<Type>, arg_no: usize) -> Self {
         assert!(parent.borrow().is_func());
         Value::new(
-            ValueBase::new(ty, Some(name)),
+            ValueBase::new(ty, name),
             ValueExt::Arg(Arg::new(downgrade!(&parent), arg_no)),
         )
     }
@@ -365,19 +420,21 @@ impl Value {
         ty: Rc<Type>,
         is_const: bool,
         init_val: opt_ptr!(Value),
-    ) -> Self {
+    ) -> ptr!(Self) {
         let obj = User::new(
             UserBase::new(),
             UserExt::GlobalVariable(GlobalVariable::new(is_const, init_val.clone())),
         );
         let gv = make_ptr!(obj);
-        ModulePtr(m).add_gv(gv.clone());
         let mut res = UserPtr(gv);
         if let Some(ptr) = init_val {
             assert!(ptr.borrow().is_const());
             res.add_operand(ptr);
         }
-        Value::new(ValueBase::new(ty, Some(name)), ValueExt::User(res))
+        let temp = Value::new(ValueBase::new(ty, Some(name)), ValueExt::User(res));
+        let res = make_ptr!(temp);
+        ModulePtr(m).add_gv(res.clone());
+        res
     }
 }
 
@@ -393,7 +450,7 @@ impl Value {
     /// - 一个 Value，内部封装了 Constant::Int
     /// - 类型为传入的 `ty`
     pub fn create_const_int(ty: Rc<Type>, val: i32) -> Self {
-        assert!(ty.is_int());
+        assert!(ty.is_bool_or_int());
         let user = User::new(UserBase::new(), UserExt::Constant(Constant::Int(val)));
         Value::new(
             ValueBase::new(ty, None),
@@ -408,7 +465,7 @@ impl Value {
     /// # 返回值
     /// - 等价于 create_const_int(ty, 0)
     pub fn create_const_zero(ty: Rc<Type>) -> Self {
-        assert!(ty.is_int());
+        assert!(ty.is_bool_or_int());
         Value::create_const_int(ty, 0)
     }
     /// 创建数组常量
@@ -417,23 +474,27 @@ impl Value {
     /// - `ty`        : 数组类型（必须是 ArrayType）
     /// - `val`       : 元素值列表
     ///   - 长度必须与数组类型定义的元素个数匹配（当前代码未强制检查）
-    ///   - 每个元素必须是常量（is_const() == true）
+    ///   - 每个元素必须是Constant（is_const() == true）
     ///
     /// # 返回值
     /// - 一个 Value，内部封装了 Constant::Array
     /// - 类型为传入的 `ty`
-    pub fn create_const_arr(ty: Rc<Type>, val: Vec<Value>) -> Self {
+    pub fn create_const_arr(ty: Rc<Type>, val: Vec<ptr!(Value)>) -> Self { // * 注意： 存在多维数组常量这种情况
         assert!(ty.is_arr());
         for i in &val {
-            assert!(i.is_const());
+            assert!(i.borrow().is_const());
         }
         let user = User::new(
             UserBase::new(),
-            UserExt::Constant(Constant::Array(ArrayConstant::new_with_vec(val))),
+            UserExt::Constant(Constant::Array(ArrayConstant::new_with_vec(&val))),
         );
+        let mut userptr = UserPtr(make_ptr!(user));
+        for i in val {
+            userptr.add_operand(i);
+        }
         Value::new(
             ValueBase::new(ty, None),
-            ValueExt::User(UserPtr(make_ptr!(user))),
+            ValueExt::User(userptr),
         )
     }
     /// 创建浮点常量
@@ -491,7 +552,7 @@ impl Value {
         assert!(bb.borrow().is_bb());
         assert!(v1.borrow().get_type().is_int());
         assert!(v2.borrow().get_type().is_int());
-        let ty = bb.borrow().bb_get_module_ptr().get_int_ty();
+        let ty = module_ptr!(bb).get_int_ty();
         let mut userptr = Self::make_inst_user(OpId::IBinary(op_id), bb);
         userptr.add_operand(v1);
         userptr.add_operand(v2);
@@ -520,7 +581,7 @@ impl Value {
         assert!(bb.borrow().is_bb());
         assert!(v1.borrow().get_type().is_float());
         assert!(v2.borrow().get_type().is_float());
-        let ty = bb.borrow().bb_get_module_ptr().get_float_ty();
+        let ty = module_ptr!(bb).get_float_ty();
         let mut userptr = Self::make_inst_user(OpId::FBinary(op_id), bb);
         userptr.add_operand(v1);
         userptr.add_operand(v2);
@@ -536,7 +597,7 @@ impl Value {
     ///
     /// # 参数约束
     /// - `op_id`     : 整数比较谓词（eq, ne, gt, ge, lt, le）
-    /// - `v1`, `v2`  : 两个整数操作数
+    /// - `v1`, `v2`  : 两个整数或bool操作数
     /// - `bb`        : 插入的基本块
     ///
     /// # 返回值
@@ -548,8 +609,8 @@ impl Value {
         bb: ptr!(Value),
     ) -> Self {
         assert!(bb.borrow().is_bb());
-        assert!(v1.borrow().vb.type_.is_int() && v2.borrow().vb.type_.is_int());
-        let ty = bb.borrow().bb_get_module_ptr().get_bool_ty();
+        assert!((v1.borrow().vb.type_.is_int() && v2.borrow().vb.type_.is_int())||(v1.borrow().vb.type_.is_bool() && v2.borrow().vb.type_.is_bool())); //* 用来实现!指令 */
+        let ty = module_ptr!(bb).get_bool_ty();
         let mut userptr = Self::make_inst_user(OpId::ICmp(op_id), bb);
         userptr.add_operand(v1);
         userptr.add_operand(v2);
@@ -579,7 +640,7 @@ impl Value {
     ) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(v1.borrow().get_type().is_float() && v2.borrow().get_type().is_float());
-        let ty = bb.borrow().bb_get_module_ptr().get_bool_ty();
+        let ty = module_ptr!(bb).get_bool_ty();
         let mut userptr = Self::make_inst_user(OpId::FCmp(op_id), bb);
         userptr.add_operand(v1);
         userptr.add_operand(v2);
@@ -631,8 +692,8 @@ impl Value {
         assert!(if_true.borrow().is_bb());
         assert!(bb.borrow().is_bb());
         let ty = module_ptr!(bb).get_void_ty();
-        if_true.borrow_mut().add_pre_bbs(bb.clone());
-        bb.borrow_mut().add_succ_bbs(if_true.clone());
+        if_true.borrow_mut().bb_add_pre_bbs(bb.clone());
+        bb.borrow_mut().bb_add_succ_bbs(if_true.clone());
         let mut userptr = Self::make_inst_user(OpId::Br, bb);
         userptr.add_operand(if_true);
         Self::make_val_from_up(userptr, ty)
@@ -659,10 +720,10 @@ impl Value {
         assert!(cond.borrow().get_type().is_bool());
         let ty = module_ptr!(bb).get_void_ty();
         // TODO 这里可能产生了循环引用，会发生内存泄漏
-        if_true.borrow_mut().add_pre_bbs(bb.clone());
-        if_false.borrow_mut().add_pre_bbs(bb.clone());
-        bb.borrow_mut().add_succ_bbs(if_true.clone());
-        bb.borrow_mut().add_succ_bbs(if_false.clone());
+        if_true.borrow_mut().bb_add_pre_bbs(bb.clone());
+        if_false.borrow_mut().bb_add_pre_bbs(bb.clone());
+        bb.borrow_mut().bb_add_succ_bbs(if_true.clone());
+        bb.borrow_mut().bb_add_succ_bbs(if_false.clone());
         let mut userptr = Self::make_inst_user(OpId::Br, bb);
         userptr.add_operand(cond);
         userptr.add_operand(if_true);
@@ -799,12 +860,11 @@ impl Value {
     ///
     /// # 参数约束
     /// - `val`       : 输入值，必须是 bool 类型（i1）
-    /// - `ty`        : 目标整数类型（通常 i32）
     /// - `bb`        : 插入的基本块
-    pub fn create_inst_zext(val: ptr!(Value), ty: Rc<Type>, bb: ptr!(Value)) -> Self {
+    pub fn create_inst_zext(val: ptr!(Value), bb: ptr!(Value)) -> Self {
         assert!(bb.borrow().is_bb());
         assert!(val.borrow().get_type().is_bool());
-        assert!(ty.is_int());
+        let ty = module_ptr!(bb).get_int_ty();
         let mut userptr = Self::make_inst_user(OpId::Zext, bb);
         userptr.add_operand(val);
         Self::make_val_from_up(userptr, ty)

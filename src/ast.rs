@@ -70,7 +70,7 @@ pub struct FuncFParams {
 pub struct FuncFParam {
     pub btype: Btype,
     pub ident: String,
-    pub dims: Option<Vec<Exp>>
+    pub dims: Option<Vec<ConstExp>>
 }
 #[derive(Debug)]
 pub struct Block {

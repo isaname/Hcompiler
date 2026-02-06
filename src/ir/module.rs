@@ -5,11 +5,13 @@ use std::{
     rc::{Rc, Weak},
 };
 
+
 use crate::{
     ir::{
         type_::{ArrayType, FunctionType, PointerType, Type, TypeData},
         user::{GlobalVariable, User},
         value::Function,
+        value::Value
     },
     make_ptr, ptr, weak_ptr,
 };
@@ -17,8 +19,8 @@ use crate::{
 pub struct ModulePtr(pub ptr!(Module));
 
 pub struct Module {
-    gv_list: LinkedList<ptr!(User)>,
-    func_list: LinkedList<ptr!(User)>,
+    gv_list: LinkedList<ptr!(Value)>, //* GlobalValue
+    func_list: LinkedList<ptr!(Value)>, //* Function
     type_cache: TypeCache,
 }
 
@@ -34,7 +36,7 @@ pub struct TypeCache {
 }
 
 impl Module {
-    fn new() -> ModulePtr {
+    pub fn new() -> ModulePtr {
         let temp = Module {
             gv_list: LinkedList::new(),
             func_list: LinkedList::new(),
@@ -63,6 +65,9 @@ impl TypeCache {
 }
 
 impl ModulePtr {
+    pub fn clone(&self) -> Self {
+        ModulePtr(self.0.clone())
+    }
     pub fn get_void_ty(&self) -> Rc<Type> {
         self.0.borrow().type_cache.void_ty.clone()
     }
@@ -165,13 +170,13 @@ impl ModulePtr {
         }
     }
 
-    pub fn add_function(&mut self, func: ptr!(User)) {
+    pub fn add_function(&mut self, func: ptr!(Value)) {
         // TODO 判断一下User是否真的是Function
         // assert!(func.borrow().is)
         self.0.borrow_mut().func_list.push_back(func);
     }
 
-    pub fn add_gv(&mut self, gv: ptr!(User)) {
+    pub fn add_gv(&mut self, gv: ptr!(Value)) {
         // TODO 同上
         self.0.borrow_mut().gv_list.push_back(gv);
     }

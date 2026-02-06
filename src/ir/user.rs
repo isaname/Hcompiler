@@ -47,8 +47,8 @@ pub struct ArrayConstant {
 }
 
 pub struct Instruction {
-    parent: weak_ptr!(Value), //* Value: BasicBlock
-    op_id: OpId,
+    pub parent: weak_ptr!(Value), //* Value: BasicBlock
+    pub op_id: OpId,
 }
 
 #[derive(PartialEq)]
@@ -122,10 +122,10 @@ impl ArrayConstant {
     pub fn new() -> Self {
         ArrayConstant { value: Vec::new() }
     }
-    pub fn new_with_vec(val:Vec<Value>) -> Self {
+    pub fn new_with_vec(val:&Vec<ptr!(Value)>) -> Self {
         let mut v = Vec::new();
         for i in val {
-            v.push(make_ptr!(i));
+            v.push(i.clone());
         }
         ArrayConstant { value: v }
     }

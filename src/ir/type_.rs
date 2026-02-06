@@ -1,7 +1,6 @@
 use crate::{ptr, opt_ptr, weak_ptr};
 
 use super::module::Module;
-use crate::ir::module::ModulePtr;
 
 use std::{cell::RefCell, mem::discriminant, rc::{Rc, Weak}};
 
@@ -146,12 +145,4 @@ impl Type {
             }
         }
     }
-}
-
-impl Type {
-    // * pointer type
-    // 制造一个指向self的ptr类型
-    // pub fn make_ptr_ty(&self) -> Self {
-    //     ModulePtr(self.m.upgrade().unwrap()).get_ptr_ty(self)
-    // }
 }

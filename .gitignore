@@ -2,3 +2,4 @@
 Cargo.lock
 hello.c
 **/*dump.rs
+*.log

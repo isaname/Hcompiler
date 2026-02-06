@@ -2,6 +2,7 @@
 mod ast;
 mod ir;
 mod macros;
+mod irgen;
 // mod irgen;
 use lalrpop_util::lalrpop_mod;
 use std::env::args;

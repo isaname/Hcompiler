@@ -103,11 +103,6 @@ InitVal: InitVal = {
   }
 }
 
-// FuncDef: FuncDef = {
-//   <func_type: FuncType> <ident: Ident> "(" <func_f_params:FuncFParams?> ")" <block: Block> => {
-//     FuncDef { <> }
-//   }
-// }
 FuncDef: FuncDef = {
   <head: FuncDefHead> ")" <block: Block> => {
     FuncDef { func_type: head.0, ident: head.1, func_f_params: None, block }
@@ -131,10 +126,10 @@ FuncFParams: FuncFParams = <item:FuncFParam> <mut items:("," <FuncFParam>)*> => 
 
 
 FuncFParam: FuncFParam = {
-  "int" <ident:Ident> <dims:("[" "]" <("["<Exp>"]")*>)?> => {
+  "int" <ident:Ident> <dims:("[" "]" <("["<ConstExp>"]")*>)?> => {
     FuncFParam{ btype:Btype::Int, ident, dims}
   },
-  "float" <ident:Ident> <dims:("[" "]" <("["<Exp>"]")*>)?> => {
+  "float" <ident:Ident> <dims:("[" "]" <("["<ConstExp>"]")*>)?> => {
     FuncFParam{ btype:Btype::Float, ident, dims}
   }
 }
