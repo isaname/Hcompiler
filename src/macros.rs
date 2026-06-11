@@ -24,6 +24,9 @@ macro_rules! make_ptr {
     ($name:ident) => {
         Rc::new(RefCell::new($name))
     };
+    ($name:expr) => {
+        Rc::new(RefCell::new($name))
+    };
 }
 
 #[macro_export]
@@ -46,5 +49,21 @@ macro_rules! create_inst {
 macro_rules! module_ptr {
     ($basicblock:ident) => {
         ModulePtr($basicblock.borrow().bb_get_module().unwrap())
+    };
+}
+
+#[macro_export]
+/// 获取xxxPtr内部的borrow
+macro_rules! item {
+    ($i:ident) => {
+        $i.0.borrow()
+    };
+}
+
+#[macro_export]
+/// 获取xxxPtr内部的borrow_mut
+macro_rules! item_mut {
+    ($i:ident) => {
+        $i.0.borrow_mut()
     };
 }

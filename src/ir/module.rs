@@ -9,9 +9,8 @@ use std::{
 use crate::{
     ir::{
         type_::{ArrayType, FunctionType, PointerType, Type, TypeData},
-        user::{GlobalVariable, User},
-        value::Function,
-        value::Value
+        user::{GVPtr, GlobalVariable, User},
+        value::{Function, FunctionPtr, Value}
     },
     make_ptr, ptr, weak_ptr,
 };
@@ -19,8 +18,8 @@ use crate::{
 pub struct ModulePtr(pub ptr!(Module));
 
 pub struct Module {
-    gv_list: LinkedList<ptr!(Value)>, //* GlobalValue
-    func_list: LinkedList<ptr!(Value)>, //* Function
+    gv_list: LinkedList<GVPtr>, //* GlobalValue
+    func_list: LinkedList<FunctionPtr>, //* Function
     type_cache: TypeCache,
 }
 
@@ -170,13 +169,13 @@ impl ModulePtr {
         }
     }
 
-    pub fn add_function(&mut self, func: ptr!(Value)) {
+    pub fn add_function(&mut self, func: FunctionPtr) {
         // TODO 判断一下User是否真的是Function
         // assert!(func.borrow().is)
         self.0.borrow_mut().func_list.push_back(func);
     }
 
-    pub fn add_gv(&mut self, gv: ptr!(Value)) {
+    pub fn add_gv(&mut self, gv: GVPtr) {
         // TODO 同上
         self.0.borrow_mut().gv_list.push_back(gv);
     }
