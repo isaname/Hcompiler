@@ -10,3 +10,4 @@ pub mod const_impl;
 pub mod func_impl;
 pub mod gv_impl;
 pub mod bb_impl;
+pub mod ir_printer;

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
+use crate::ir::value::ValuePtr;
 use crate::{ir::value::Value, opt_ptr, ptr};
 use std::rc::Rc;
 use std::cell::RefCell;
 pub struct Scope {
-    container: Vec<HashMap<String, ptr!(Value)>>
+    container: Vec<HashMap<String, ValuePtr>>
 }
 
 impl Scope {
@@ -19,15 +20,18 @@ impl Scope {
     pub fn exit(&mut self) {
         self.container.pop();
     }
-    pub fn find(&self, name: &String) -> opt_ptr!(Value) {
+    pub fn depth(&self) -> usize {
+        self.container.len()
+    }
+    pub fn find(&self, name: &String) -> Option<ValuePtr> {
         for i in self.container.iter().rev() {
             if i.contains_key(name) {
-                return i.get(name).cloned()
+                return Some(i.get(name).unwrap().clone())
             }
         }
         None
     }
-    pub fn add(&mut self, name: &String, val: ptr!(Value)) -> bool {
+    pub fn add(&mut self, name: &String, val: ValuePtr) -> bool {
         let item = self.container.last_mut().unwrap();
         if item.contains_key(name) {
             return false;

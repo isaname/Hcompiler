@@ -34,7 +34,7 @@ impl FunctionPtr {
 
     pub fn create(ty: Rc<Type>, name: String, mut parent:ModulePtr) -> Self {
         let v = ValuePtr::new(ty.clone(), name);
-        
+
         let func = Function {
             value:v,
             module: downgrade!(&parent.0),
@@ -44,6 +44,8 @@ impl FunctionPtr {
         };
         let ptr = make_ptr!(func);
         let res = FunctionPtr(ptr);
+        // 设置 ValueClass，使 to_function() 能正确识别
+        res.0.borrow().value.0.borrow_mut().class = Some(ValueClass::Function(downgrade!(&res.0)));
         for i in 0..res.get_num_of_args() {
             let arg = ArgPtr::new(ty.get_func_param_ty(i).unwrap(), String::from(""), res.clone(), i);
             res.0.borrow_mut().args.push(arg);

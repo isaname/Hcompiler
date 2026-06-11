@@ -27,7 +27,9 @@ impl BasicBlockPtr{
         };
         let ptr = make_ptr!(item);
         v.0.borrow_mut().class = Some(ValueClass::BasicBlock(downgrade!(&ptr)));
-        BasicBlockPtr(ptr)  
+        let bb = BasicBlockPtr(ptr);
+        parent.0.borrow_mut().bbs.push(bb.clone());
+        bb
     }
 
     pub fn add_pre_bbs(&mut self, bb: BasicBlockPtr) {
@@ -68,15 +70,19 @@ impl BasicBlockPtr{
     }
 
     pub fn add_inst(&self, inst: InstPtr) {
-
+        assert!(!self.is_terminated(), "Inserting instruction to terminated bb");
+        self.0.borrow_mut().insts.push(inst);
     }
 
     pub fn add_inst_at_begin(&self, inst: InstPtr) {
-
+        self.0.borrow_mut().insts.insert(0, inst);
     }
 
     pub fn remove_inst(&self, inst: InstPtr) {
-
+        let target = inst.0.as_ptr();
+        self.0.borrow_mut().insts.retain(|i| {
+            i.0.as_ptr() != target
+        });
     }
 
     pub fn is_empty(&self) -> bool {
@@ -96,6 +102,7 @@ impl BasicBlockPtr{
     }
 
     pub fn erase_from_parent(&self) {
-        
+        let mut parent = self.get_parent();
+        parent.remove(self.clone());
     }
 }

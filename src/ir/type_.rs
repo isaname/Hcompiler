@@ -47,6 +47,10 @@ impl Type{
         }
     }
 
+    pub fn tdata(&self) -> &TypeData {
+        &self.tdata
+    }
+
     pub fn get_module(&self) -> weak_ptr!(Module) {
         self.m.clone()
     }
