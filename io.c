@@ -2,7 +2,7 @@
 #include <stdlib.h>
 int input() {
     int a;
-    scanf("%d", &a);
+    (void)!scanf("%d", &a);
     return a;
 }
 

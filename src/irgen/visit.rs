@@ -175,6 +175,7 @@ impl IRGenerator {
         let func = FunctionPtr::create(func_ty, name.clone(), self.m.clone());
         self.scope.add(&name, func.to_val());
     }
+    
     pub fn get_module(&self) -> ModulePtr {
         self.m.clone()
     }

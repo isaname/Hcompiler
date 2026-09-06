@@ -33,7 +33,7 @@ pub struct GlobalVariable {
 }
 pub struct GVPtr(pub ptr!(GlobalVariable));
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum OpID{
     // Terminator Instructions
     Ret,
