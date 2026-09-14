@@ -18,6 +18,8 @@ struct Context {
     is_const: bool,
     curr_func: Option<FunctionPtr>,
     func_param_idx: usize,
+    /// while 循环栈，每层保存 (continue 目标, break 目标)
+    loop_stack: Vec<(BasicBlockPtr, BasicBlockPtr)>,
 }
 
 pub struct IRGenerator {
@@ -33,6 +35,7 @@ impl Context {
             is_const: false,
             curr_func: None,
             func_param_idx: 0,
+            loop_stack: Vec::new(),
         }
     }
 }
@@ -194,6 +197,25 @@ impl IRGenerator {
 
     fn const_int(&mut self, val: i32) -> ValuePtr {
         let c = ConstantPtr::new_int(self.m.get_int_ty(), String::new(), val);
+        let v = c.0.borrow().user.to_val();
+        self.m.add_const(c);
+        v
+    }
+
+    /// 跳转到循环的 continue/break 目标。跳转后本块已终止，
+    /// 但源码里可能还跟着语句，所以开一个新的（不可达）块继续生成。
+    fn jump_out_of_loop(&mut self, target: BasicBlockPtr) {
+        if self.buidler.get_insert_block().is_terminated() {
+            return;
+        }
+        self.buidler.create_br(target);
+        let func = self.context.curr_func.as_ref().unwrap().clone();
+        let unreachable_bb = BasicBlockPtr::create(self.m.clone(), String::new(), func);
+        self.buidler.set_insert_point(unreachable_bb);
+    }
+
+    fn const_bool(&mut self, val: bool) -> ValuePtr {
+        let c = ConstantPtr::new_int(self.m.get_bool_ty(), String::new(), val as i32);
         let v = c.0.borrow().user.to_val();
         self.m.add_const(c);
         v
@@ -568,7 +590,11 @@ impl IRGenerator {
                 self.buidler.create_cond_br(cond_val, body_bb.clone(), end_bb.clone());
 
                 self.buidler.set_insert_point(body_bb);
+                self.context
+                    .loop_stack
+                    .push((cond_bb.clone(), end_bb.clone()));
                 self.visit_stmt(*body);
+                self.context.loop_stack.pop();
                 if !self.buidler.get_insert_block().is_terminated() {
                     self.buidler.create_br(cond_bb);
                 }
@@ -576,10 +602,24 @@ impl IRGenerator {
                 self.buidler.set_insert_point(end_bb);
             }
             Stmt::BreakStmt => {
-                // TODO: 需要 break/continue 栈
+                let target = self
+                    .context
+                    .loop_stack
+                    .last()
+                    .expect("break outside of loop")
+                    .1
+                    .clone();
+                self.jump_out_of_loop(target);
             }
             Stmt::ContStmt => {
-                // TODO: 需要 break/continue 栈
+                let target = self
+                    .context
+                    .loop_stack
+                    .last()
+                    .expect("continue outside of loop")
+                    .0
+                    .clone();
+                self.jump_out_of_loop(target);
             }
             Stmt::RetStmt(opt_exp) => {
                 if let Some(exp) = opt_exp {
@@ -638,9 +678,10 @@ impl IRGenerator {
 
                 self.buidler.set_insert_point(merge_bb);
                 // phi
+                let true_val = self.const_bool(true);
                 let phi = InstPtr::phi_inst(
                     self.m.get_bool_ty(),
-                    vec![self.const_int(1), rhs_bool],
+                    vec![true_val, rhs_bool],
                     vec![lhs_bb, rhs_end_bb],
                     self.buidler.get_insert_block(),
                 );
@@ -670,9 +711,10 @@ impl IRGenerator {
                 self.buidler.create_br(merge_bb.clone());
 
                 self.buidler.set_insert_point(merge_bb);
+                let false_val = self.const_bool(false);
                 let phi = InstPtr::phi_inst(
                     self.m.get_bool_ty(),
-                    vec![self.const_int(0), rhs_bool],
+                    vec![false_val, rhs_bool],
                     vec![lhs_bb, rhs_end_bb],
                     self.buidler.get_insert_block(),
                 );

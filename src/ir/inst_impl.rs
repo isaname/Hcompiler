@@ -232,12 +232,13 @@ impl InstPtr {
     /// Phi 指令
     pub fn phi_inst(ty: Rc<Type>, vals: Vec<ValuePtr>, val_bbs: Vec<BasicBlockPtr>, bb: BasicBlockPtr) -> Self {
         assert!(vals.len() == val_bbs.len(), "Unmatched vals and bbs");
-        let inst = Self::new(ty.clone(), OpID::Phi, bb);
+        let inst = Self::new(ty.clone(), OpID::Phi, bb.clone());
         for i in 0..vals.len() {
             assert!(Rc::ptr_eq(&ty, &vals[i].get_type()), "Bad type for phi");
             inst.to_user().add_operand(vals[i].clone());
             inst.to_user().add_operand(val_bbs[i].to_val());
         }
+        bb.add_inst_at_begin(inst.clone());
         inst
     }
 }
